@@ -587,6 +587,10 @@ export function ThreeDeeRender(props: {
       return;
     }
 
+    if (renderer.getCameraState()?.name !== sharedPanelState.cameraState.name) {
+      return;
+    }
+
     if (sharedPanelState.followMode !== config.followMode) {
       renderer.setCameraSyncError(
         `Follow mode must be ${sharedPanelState.followMode} to sync camera.`,
