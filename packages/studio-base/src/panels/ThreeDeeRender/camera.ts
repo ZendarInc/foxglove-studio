@@ -17,6 +17,7 @@ export type MouseEventObject = {
 };
 
 export type CameraState = {
+  name: string;
   distance: number;
   perspective: boolean;
   phi: number;
@@ -30,6 +31,7 @@ export type CameraState = {
 };
 
 export const DEFAULT_CAMERA_STATE: CameraState = {
+  name: "main",
   distance: 20,
   perspective: true,
   phi: 60,

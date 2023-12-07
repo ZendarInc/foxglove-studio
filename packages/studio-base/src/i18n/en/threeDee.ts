@@ -70,6 +70,8 @@ export const threeDee = {
   planarProjectionFactor: "Planar projection factor",
   syncCamera: "Sync camera",
   syncCameraHelp: "Sync the camera with other panels that also have this setting enabled.",
+  CameraName: "Camera Name",
+  CameraNameHelp: "Only sync with cameras using the same name.",
   target: "Target",
   theta: "Theta",
   view: "View",

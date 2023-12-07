@@ -139,6 +139,13 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
             value: config.scene.syncCamera ?? false,
             help: t("threeDee:syncCameraHelp"),
           },
+          CameraName: {
+            label: t("threeDee:CameraName"),
+            input: "string",
+            value: camera.name,
+            error: this.renderer.cameraSyncError(),
+            help: t("threeDee:CameraNameHelp"),
+          },
           distance: {
             label: t("threeDee:distance"),
             input: "number",
@@ -276,7 +283,11 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
 
     // camera settings
     if (category === "cameraState") {
-      if (path[1] === "syncCamera") {
+      if (path[1] === "CameraName") {
+        this.renderer.updateConfig((draft) => {
+          draft.cameraState.name = value as string;
+        });
+      } else if (path[1] === "syncCamera") {
         // Update the configuration. This is done manually since syncCamera is under `scene`, not `cameraState`
         this.renderer.updateConfig((draft) => {
           draft.scene.syncCamera = value as boolean;
@@ -480,6 +491,7 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
   public getCameraState(): CameraState {
     const config = this.renderer.config;
     return {
+      name: config.cameraState.name,
       perspective: config.cameraState.perspective,
       distance: this.#controls.getDistance(),
       phi: THREE.MathUtils.radToDeg(this.#controls.getPolarAngle()),
