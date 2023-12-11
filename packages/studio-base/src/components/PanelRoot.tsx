@@ -33,7 +33,7 @@ const useStyles = makeStyles<Omit<PanelRootProps, "fullscreenState" | "selected"
       flex: "1 1 auto",
       overflow: "hidden",
       backgroundColor: palette.background.default,
-      border: `0px solid ${alpha(palette.primary.main, 0.67)}`,
+      border: `4px solid ${alpha("#00BA5F", 0.67)}`,
       transition: transitions.create("border-width", {
         duration, // match to timeout duration inside Panel component
       }),
