@@ -112,7 +112,7 @@ export default React.memo<Props>(function PanelToolbar({
     >
       {children ??
         (title && (
-          <Typography noWrap variant="body2" color="text.secondary" flex="auto">
+          <Typography noWrap variant="h4" color="text.secondary" flex="auto">
             {title}
           </Typography>
         ))}
