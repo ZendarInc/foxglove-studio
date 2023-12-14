@@ -4,19 +4,28 @@
 
 import { t } from "i18next";
 import * as _ from "lodash-es";
+import * as THREE from "three";
 
 import Logger from "@foxglove/log";
+import { SceneEntity } from "@foxglove/schemas";
+import { TextPrimitive } from "@foxglove/schemas";
 import { SettingsTreeAction, SettingsTreeFields } from "@foxglove/studio";
+import { RenderableTexts } from "@foxglove/studio-base/panels/ThreeDeeRender/renderables/primitives/RenderableTexts";
 
 import { RenderableLineList } from "./markers/RenderableLineList";
-import type { IRenderer } from "../IRenderer";
+import type { IRenderer, RangeMarkersConfig } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { stringToRgba } from "../color";
 import { vec3TupleApproxEquals } from "../math";
 import { Marker, MarkerAction, MarkerType, TIME_ZERO, Vector3 } from "../ros";
-import { CustomLayerSettings, PRECISION_DEGREES, PRECISION_DISTANCE } from "../settings";
+import {
+  CustomLayerSettings,
+  LayerSettingsEntity,
+  PRECISION_DEGREES,
+  PRECISION_DISTANCE,
+} from "../settings";
 import { makePose, xyzrpyToPose } from "../transforms";
 
 const log = Logger.getLogger(__filename);
@@ -24,21 +33,40 @@ const log = Logger.getLogger(__filename);
 export type LayerSettingsGrid = CustomLayerSettings & {
   layerId: "foxglove.Grid";
   frameId: string | undefined;
-  size: number;
-  divisions: number;
-  lineWidth: number;
-  color: string;
-  position: [number, number, number];
-  rotation: [number, number, number];
+  gridSize: number;
+  gridDivisions: number;
+  gridLineWidth: number;
+  gridColor: string;
+  gridPosition: [number, number, number];
+  gridRotation: [number, number, number];
+  rangeMarkerVisible: boolean;
+  rangeMarkerFollowCamera: boolean;
+  rangeMarkerFollowCameraNudge: [number, number];
+  rangeMarkerPosition: [number, number];
+  rangeMarkerFontSize: number;
+  rangeMarkerFontColor: string;
 };
 
 const LAYER_ID = "foxglove.Grid";
-const DEFAULT_SIZE = 10;
-const DEFAULT_DIVISIONS = 10;
-const DEFAULT_LINE_WIDTH = 1;
-const DEFAULT_COLOR = "#248eff";
+const DEFAULT_GRID_SIZE = 10;
+const DEFAULT_GRID_DIVISIONS = 10;
+const DEFAULT_GRID_LINE_WIDTH = 1;
+const DEFAULT_GRID_COLOR = "#248eff";
+const DEFAULT_RANGE_MARKER_VISIBLE = false;
+const DEFAULT_RANGE_MARKER_FOLLOW_CAMERA = false;
+const DEFAULT_RANGE_MARKER_FOLLOW_CAMERA_NUDGE: [number, number] = [0, 0];
+const DEFAULT_RANGE_MARKER_POSITION: [number, number] = [-DEFAULT_GRID_SIZE, -DEFAULT_GRID_SIZE];
+const DEFAULT_RANGE_MARKER_FONT_SIZE = 20;
+const DEFAULT_RANGE_MARKER_FONT_COLOR = "#248eff";
 const MAX_DIVISIONS = 4096; // The JS heap size is a limiting factor
 const LINE_OPTIONS = { worldUnits: false };
+const TEXTS_OPTIONS: LayerSettingsEntity = {
+  visible: true,
+  frameLocked: true,
+  showOutlines: false,
+  color: undefined,
+  selectedIdVariable: undefined,
+};
 
 const DEFAULT_SETTINGS: LayerSettingsGrid = {
   visible: true,
@@ -47,22 +75,32 @@ const DEFAULT_SETTINGS: LayerSettingsGrid = {
   instanceId: "invalid",
   layerId: LAYER_ID,
   frameId: undefined,
-  size: DEFAULT_SIZE,
-  divisions: DEFAULT_DIVISIONS,
-  lineWidth: DEFAULT_LINE_WIDTH,
-  color: DEFAULT_COLOR,
-  position: [0, 0, 0],
-  rotation: [0, 0, 0],
+
+  gridSize: DEFAULT_GRID_SIZE,
+  gridDivisions: DEFAULT_GRID_DIVISIONS,
+  gridLineWidth: DEFAULT_GRID_LINE_WIDTH,
+  gridColor: DEFAULT_GRID_COLOR,
+  gridPosition: [0, 0, 0],
+  gridRotation: [0, 0, 0],
+
+  rangeMarkerVisible: DEFAULT_RANGE_MARKER_VISIBLE,
+  rangeMarkerFollowCamera: DEFAULT_RANGE_MARKER_FOLLOW_CAMERA,
+  rangeMarkerFollowCameraNudge: DEFAULT_RANGE_MARKER_FOLLOW_CAMERA_NUDGE,
+  rangeMarkerPosition: DEFAULT_RANGE_MARKER_POSITION,
+  rangeMarkerFontSize: DEFAULT_RANGE_MARKER_FONT_SIZE,
+  rangeMarkerFontColor: DEFAULT_RANGE_MARKER_FONT_COLOR,
 };
 
 export type GridUserData = BaseUserData & {
   settings: LayerSettingsGrid;
   lineList: RenderableLineList;
+  texts: RenderableTexts;
 };
 
 export class GridRenderable extends Renderable<GridUserData> {
   public override dispose(): void {
     this.userData.lineList.dispose();
+    this.userData.texts.dispose();
     super.dispose();
   }
 }
@@ -80,6 +118,8 @@ export class Grids extends SceneExtension<GridRenderable> {
     });
 
     renderer.on("transformTreeUpdated", this.#handleTransformTreeUpdated);
+    renderer.on("rangeMarkersConfigChanged", this.#rangeMarkersConfigChanged);
+    renderer.on("cameraMove", this.#cameraMove);
 
     // Load existing grid layers from the config
     for (const [instanceId, entry] of Object.entries(renderer.config.layers)) {
@@ -91,6 +131,9 @@ export class Grids extends SceneExtension<GridRenderable> {
 
   public override dispose(): void {
     this.renderer.off("transformTreeUpdated", this.#handleTransformTreeUpdated);
+    this.renderer.off("rangeMarkersConfigChanged", this.#rangeMarkersConfigChanged);
+    this.renderer.off("cameraMove", this.#cameraMove);
+
     super.dispose();
   }
 
@@ -112,15 +155,109 @@ export class Grids extends SceneExtension<GridRenderable> {
         ...this.renderer.coordinateFrameList,
       ];
 
-      // prettier-ignore
       const fields: SettingsTreeFields = {
-        frameId: { label: t("threeDee:frame"), input: "select", options: frameIdOptions, value: config.frameId }, // options is extended in `settings.ts:buildTopicNode()`
-        size: { label: t("threeDee:size"), input: "number", min: 0, step: 0.5, precision: PRECISION_DISTANCE, value: config.size, placeholder: String(DEFAULT_SIZE) },
-        divisions: { label: t("threeDee:divisions"), input: "number", min: 1, max: MAX_DIVISIONS, step: 1, precision: 0, value: config.divisions, placeholder: String(DEFAULT_DIVISIONS) },
-        lineWidth: { label: t("threeDee:lineWidth"), input: "number", min: 0, step: 0.5, precision: 1, value: config.lineWidth, placeholder: String(DEFAULT_LINE_WIDTH) },
-        color: { label: t("threeDee:color"), input: "rgba", value: config.color ?? DEFAULT_COLOR },
-        position: { label: t("threeDee:position"), input: "vec3", labels: ["X", "Y", "Z"], precision: PRECISION_DISTANCE, value: config.position ?? [0, 0, 0] },
-        rotation: { label: t("threeDee:rotation"), input: "vec3", labels: ["R", "P", "Y"], precision: PRECISION_DEGREES, value: config.rotation ?? [0, 0, 0] },
+        frameId: {
+          label: t("threeDee:frame"),
+          input: "select",
+          options: frameIdOptions,
+          value: config.frameId,
+        }, // options is extended in `settings.ts:buildTopicNode()`
+        gridSize: {
+          label: t("threeDee:size"),
+          input: "number",
+          min: 0,
+          step: 0.5,
+          precision: PRECISION_DISTANCE,
+          value: config.gridSize,
+          placeholder: String(DEFAULT_GRID_SIZE),
+        },
+        gridDivisions: {
+          label: t("threeDee:divisions"),
+          input: "number",
+          min: 1,
+          max: MAX_DIVISIONS,
+          step: 1,
+          precision: 0,
+          value: config.gridDivisions,
+          placeholder: String(DEFAULT_GRID_DIVISIONS),
+        },
+        gridLineWidth: {
+          label: t("threeDee:lineWidth"),
+          input: "number",
+          min: 0,
+          step: 0.5,
+          precision: 1,
+          value: config.gridLineWidth,
+          placeholder: String(DEFAULT_GRID_LINE_WIDTH),
+        },
+        gridColor: {
+          label: t("threeDee:color"),
+          input: "rgba",
+          value: config.gridColor,
+          placeholder: DEFAULT_GRID_COLOR,
+        },
+        gridPosition: {
+          label: t("threeDee:position"),
+          input: "vec3",
+          labels: ["X", "Y", "Z"],
+          precision: PRECISION_DISTANCE,
+          value: config.gridPosition ?? [0, 0, 0],
+        },
+        gridRotation: {
+          label: t("threeDee:rotation"),
+          input: "vec3",
+          labels: ["R", "P", "Y"],
+          precision: PRECISION_DEGREES,
+          value: config.gridRotation ?? [0, 0, 0],
+        },
+        rangeMarkerVisible: {
+          label: "Range Markers",
+          input: "boolean",
+          value: config.rangeMarkerVisible,
+        },
+        rangeMarkerFollowCamera: {
+          disabled: true,
+          label: "Follow Camera",
+          input: "boolean",
+          value: config.rangeMarkerFollowCamera,
+        },
+        rangeMarkerFollowCameraNudge: {
+          disabled: !(config.rangeMarkerFollowCamera ?? DEFAULT_RANGE_MARKER_FOLLOW_CAMERA),
+          label: "Nudge",
+          input: "vec2",
+          labels: ["X", "Y"],
+          step:
+            (0.25 * (config.gridSize ?? DEFAULT_GRID_SIZE)) /
+            (config.gridDivisions ?? DEFAULT_GRID_DIVISIONS),
+          precision: PRECISION_DISTANCE,
+          value: config.rangeMarkerFollowCameraNudge,
+        },
+        rangeMarkerPosition: {
+          disabled: config.rangeMarkerFollowCamera ?? DEFAULT_RANGE_MARKER_FOLLOW_CAMERA,
+          label: "Position",
+          input: "vec2",
+          labels: ["X", "Y"],
+          step:
+            (0.25 * (config.gridSize ?? DEFAULT_GRID_SIZE)) /
+            (config.gridDivisions ?? DEFAULT_GRID_DIVISIONS),
+          precision: PRECISION_DISTANCE,
+          value: config.rangeMarkerPosition,
+        },
+        rangeMarkerFontSize: {
+          label: "Markers Font Size",
+          input: "number",
+          min: 0,
+          step: 1,
+          precision: 0,
+          value: config.rangeMarkerFontSize,
+          placeholder: String(DEFAULT_RANGE_MARKER_FONT_SIZE),
+        },
+        rangeMarkerFontColor: {
+          label: "Markers Font Color",
+          input: "rgba",
+          value: config.rangeMarkerFontColor,
+          placeholder: DEFAULT_RANGE_MARKER_FONT_COLOR,
+        },
       };
 
       entries.push({
@@ -192,6 +329,35 @@ export class Grids extends SceneExtension<GridRenderable> {
     this.#updateGrid(instanceId, settings);
   };
 
+  #rangeMarkersConfigChanged = (rangeMarkersConfig: RangeMarkersConfig): void => {
+    for (const [instanceId, entry] of Object.entries(this.renderer.config.layers)) {
+      if (entry?.layerId !== LAYER_ID) {
+        continue;
+      }
+
+      this.saveSetting(["layers", instanceId, "rangeMarkerVisible"], true);
+      this.saveSetting(["layers", instanceId, "rangeMarkerFollowCameraNudge"], [0, 0]);
+      this.saveSetting(
+        ["layers", instanceId, "rangeMarkerFollowCamera"],
+        rangeMarkersConfig.followCamera,
+      );
+      this.updateSettingsTree();
+
+      const settings = this.renderer.config.layers[instanceId] as
+        | Partial<LayerSettingsGrid>
+        | undefined;
+      this.#updateGrid(instanceId, settings);
+    }
+  };
+
+  #cameraMove = (): void => {
+    for (const [instanceId, entry] of Object.entries(this.renderer.config.layers)) {
+      if (entry?.layerId === LAYER_ID) {
+        this.#updateGrid(instanceId, entry as Partial<LayerSettingsGrid>);
+      }
+    }
+  };
+
   #handleAddGrid = (instanceId: string): void => {
     log.info(`Creating ${LAYER_ID} layer ${instanceId}`);
 
@@ -222,6 +388,8 @@ export class Grids extends SceneExtension<GridRenderable> {
     if (settings == undefined) {
       if (renderable != undefined) {
         renderable.userData.lineList.dispose();
+        renderable.userData.texts.dispose();
+
         this.remove(renderable);
         this.renderables.delete(instanceId);
       }
@@ -231,44 +399,77 @@ export class Grids extends SceneExtension<GridRenderable> {
     const newSettings = { ...DEFAULT_SETTINGS, ...settings };
     if (!renderable) {
       renderable = this.#createRenderable(instanceId, newSettings);
-      renderable.userData.pose = xyzrpyToPose(newSettings.position, newSettings.rotation);
+      renderable.userData.pose = xyzrpyToPose(newSettings.gridPosition, newSettings.gridRotation);
     }
 
     const prevSettings = renderable.userData.settings;
-    const markersEqual =
-      newSettings.size === prevSettings.size &&
-      newSettings.divisions === prevSettings.divisions &&
-      newSettings.frameId === prevSettings.frameId &&
-      newSettings.lineWidth === prevSettings.lineWidth &&
-      newSettings.color === prevSettings.color;
-
     renderable.userData.settings = newSettings;
 
-    // If the marker settings changed, generate a new marker and update the renderable
-    if (!markersEqual) {
-      const marker = createMarker(newSettings);
-      renderable.userData.lineList.update(marker, undefined);
+    if (newSettings.rangeMarkerFollowCamera) {
+      const newRangeMarkerPosition = this.#nudgeRangeMarkersIntoView(newSettings);
+      newSettings.rangeMarkerPosition = newRangeMarkerPosition;
     }
+
+    const lineList = createLineList(newSettings);
+    renderable.userData.lineList.update(lineList, undefined);
+
+    const texts = createTexts(newSettings);
+    renderable.userData.texts.update(`${instanceId}:TEXTS`, texts, TEXTS_OPTIONS, 0n);
 
     // Update the pose if it changed
     if (
-      !vec3TupleApproxEquals(newSettings.position, prevSettings.position) ||
-      !vec3TupleApproxEquals(newSettings.rotation, prevSettings.rotation)
+      !vec3TupleApproxEquals(newSettings.gridPosition, prevSettings.gridPosition) ||
+      !vec3TupleApproxEquals(newSettings.gridRotation, prevSettings.gridRotation)
     ) {
-      renderable.userData.pose = xyzrpyToPose(newSettings.position, newSettings.rotation);
+      renderable.userData.pose = xyzrpyToPose(newSettings.gridPosition, newSettings.gridRotation);
     }
   }
 
+  #nudgeRangeMarkersIntoView = (settings: LayerSettingsGrid): [number, number] => {
+    const cameraState = this.renderer.getCameraState();
+    if (!cameraState) {
+      return settings.rangeMarkerPosition;
+    }
+
+    const tempVec2 = new THREE.Vector2();
+    const renderSize = this.renderer.gl.getDrawingBufferSize(tempVec2);
+    const aspectRatio = renderSize.width / renderSize.height;
+    const FovAtGroundplane = Math.sin(cameraState.fovy / 2) * cameraState.distance;
+
+    const followNudge = settings.rangeMarkerFollowCameraNudge;
+    const viewportBounds: [number, number] = [
+      FovAtGroundplane + cameraState.targetOffset[0] + followNudge[0],
+      FovAtGroundplane * aspectRatio - cameraState.targetOffset[1] + followNudge[1],
+    ];
+
+    const gridNudge = (0.5 * settings.gridSize) / settings.gridDivisions;
+    const gridBounds: [number, number] = [
+      settings.gridPosition[0] - settings.gridSize / 2 - gridNudge,
+      -settings.gridPosition[1] - settings.gridSize / 2 - gridNudge,
+    ];
+
+    const rangerMarkerBounds: [number, number] = [
+      viewportBounds[0] > gridBounds[0] ? viewportBounds[0] : gridBounds[0],
+      viewportBounds[1] > gridBounds[1] ? viewportBounds[1] : gridBounds[1],
+    ];
+
+    return rangerMarkerBounds;
+  };
+
   #createRenderable(instanceId: string, settings: LayerSettingsGrid): GridRenderable {
-    const marker = createMarker(settings);
-    const lineListId = `${instanceId}:LINE_LIST`;
-    const lineList = new RenderableLineList(
-      lineListId,
-      marker,
+    const lineList = createLineList(settings);
+    const renderableLineList = new RenderableLineList(
+      `${instanceId}:LINE_LIST`,
+      lineList,
       undefined,
       this.renderer,
       LINE_OPTIONS,
     );
+
+    const texts = createTexts(settings);
+    const renderableTexts = new RenderableTexts(this.renderer);
+    renderableTexts.update(`${instanceId}:TEXTS`, texts, TEXTS_OPTIONS, 0n);
+
     const renderable = new GridRenderable(instanceId, this.renderer, {
       receiveTime: 0n,
       messageTime: 0n,
@@ -276,9 +477,12 @@ export class Grids extends SceneExtension<GridRenderable> {
       pose: makePose(),
       settingsPath: ["layers", instanceId],
       settings,
-      lineList,
+      lineList: renderableLineList,
+      texts: renderableTexts,
     });
-    renderable.add(lineList);
+
+    renderable.add(renderableLineList);
+    renderable.add(renderableTexts);
 
     this.add(renderable);
     this.renderables.set(instanceId, renderable);
@@ -286,8 +490,14 @@ export class Grids extends SceneExtension<GridRenderable> {
   }
 }
 
-function createMarker(settings: LayerSettingsGrid): Marker {
-  const { size, divisions, color: colorStr } = settings;
+function createLineList(settings: LayerSettingsGrid): Marker {
+  const {
+    gridSize: size,
+    gridDivisions: divisions,
+    gridColor: colorStr,
+    gridLineWidth: lineWidth,
+  } = settings;
+
   const step = size / divisions;
   const halfSize = size / 2;
   const points: Vector3[] = [];
@@ -313,7 +523,7 @@ function createMarker(settings: LayerSettingsGrid): Marker {
     type: MarkerType.LINE_LIST,
     action: MarkerAction.ADD,
     pose: makePose(),
-    scale: { x: settings.lineWidth, y: 1, z: 1 },
+    scale: { x: lineWidth, y: 1, z: 1 },
     color,
     lifetime: TIME_ZERO,
     frame_locked: true,
@@ -322,5 +532,74 @@ function createMarker(settings: LayerSettingsGrid): Marker {
     text: "",
     mesh_resource: "",
     mesh_use_embedded_materials: false,
+  };
+}
+
+function createTexts(settings: LayerSettingsGrid): SceneEntity {
+  const {
+    rangeMarkerVisible: visible,
+    rangeMarkerFontColor: colorStr,
+    rangeMarkerFontSize: fontSize,
+    rangeMarkerPosition: position,
+    gridPosition,
+    gridSize,
+    gridDivisions,
+  } = settings;
+
+  const texts: TextPrimitive[] = [];
+  if (visible) {
+    const color = { r: 1, g: 1, b: 1, a: 1 };
+    stringToRgba(color, colorStr);
+
+    const step = gridSize / gridDivisions;
+    const halfSize = gridSize / 2;
+
+    for (let i = 0; i <= gridDivisions; i++) {
+      const relDistance = -halfSize + i * step;
+      const point: [number, number] = [
+        relDistance + gridPosition[0],
+        relDistance + gridPosition[1],
+      ];
+
+      texts.push({
+        pose: {
+          position: { x: relDistance, y: -position[1] - gridPosition[1], z: 0 },
+          orientation: { x: 0, y: 0, z: 0, w: 1 },
+        },
+        billboard: true,
+        font_size: fontSize,
+        scale_invariant: true,
+        color,
+        text: String(point[0].toFixed(0)),
+      });
+      texts.push({
+        pose: {
+          position: { x: position[0] - gridPosition[0], y: relDistance, z: 0 },
+          orientation: { x: 0, y: 0, z: 0, w: 1 },
+        },
+        billboard: true,
+        font_size: fontSize,
+        scale_invariant: true,
+        color,
+        text: String(point[1].toFixed(0)),
+      });
+    }
+  }
+
+  return {
+    timestamp: TIME_ZERO,
+    frame_id: "",
+    id: "RANGE_MARKERS",
+    lifetime: TIME_ZERO,
+    frame_locked: true,
+    metadata: [],
+    arrows: [],
+    cubes: [],
+    spheres: [],
+    cylinders: [],
+    lines: [],
+    triangles: [],
+    texts,
+    models: [],
   };
 }
