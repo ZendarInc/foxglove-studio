@@ -6,7 +6,10 @@ import * as _ from "lodash-es";
 
 import { filterMap } from "@foxglove/den/collection";
 import { LayoutData } from "@foxglove/studio-base/context/CurrentLayoutContext/actions";
-import type { RendererConfig } from "@foxglove/studio-base/panels/ThreeDeeRender/IRenderer";
+import {
+  DEFAULT_RANGE_MARKERS_CONFIG,
+  type RendererConfig,
+} from "@foxglove/studio-base/panels/ThreeDeeRender/IRenderer";
 import { DEFAULT_CAMERA_STATE } from "@foxglove/studio-base/panels/ThreeDeeRender/camera";
 import {
   getAllPanelIds,
@@ -88,6 +91,7 @@ function migrateLegacyToNew3DConfig(legacyConfig: Partial<Legacy3DConfig>): Rend
       ),
     ),
     scene: {},
+    rangeMarkersConfig: DEFAULT_RANGE_MARKERS_CONFIG,
     transforms: {},
     layers: {},
     imageMode: {},

@@ -32,14 +32,16 @@ import {
 } from "@foxglove/studio-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import ThemeProvider from "@foxglove/studio-base/theme/ThemeProvider";
 
-import type {
-  FollowMode,
-  IRenderer,
-  ImageModeConfig,
-  RendererConfig,
-  RendererEvents,
-  RendererSubscription,
-  TestOptions,
+import {
+  DEFAULT_RANGE_MARKERS_CONFIG,
+  type RangeMarkersConfig,
+  type FollowMode,
+  type IRenderer,
+  type ImageModeConfig,
+  type RendererConfig,
+  type RendererEvents,
+  type RendererSubscription,
+  type TestOptions,
 } from "./IRenderer";
 import type { PickedRenderable } from "./Picker";
 import { SELECTED_ID_VARIABLE } from "./Renderable";
@@ -138,6 +140,7 @@ export function ThreeDeeRender(props: {
       followMode: partialConfig?.followMode ?? "follow-pose",
       followTf: partialConfig?.followTf,
       scene: partialConfig?.scene ?? {},
+      rangeMarkersConfig: { ...DEFAULT_RANGE_MARKERS_CONFIG, ...partialConfig?.rangeMarkersConfig },
       transforms,
       topics: partialConfig?.topics ?? {},
       layers: partialConfig?.layers ?? {},
@@ -664,6 +667,18 @@ export function ThreeDeeRender(props: {
     }
   }, [measureActive, renderer]);
 
+  const onClickRangeMarkers = useCallback(() => {
+    const rangeMarkersConfig: RangeMarkersConfig = {
+      ...config.rangeMarkersConfig,
+      followCamera: !config.rangeMarkersConfig.followCamera,
+    };
+
+    log.info(`Setting Range Marker Follow Camera to ${rangeMarkersConfig.followCamera}`);
+
+    renderer?.emit("rangeMarkersConfigChanged", rangeMarkersConfig, renderer);
+    setConfig((prevConfig) => ({ ...prevConfig, rangeMarkersConfig }));
+  }, [renderer, config.rangeMarkersConfig]);
+
   const [publishActive, setPublishActive] = useState(false);
   useEffect(() => {
     if (renderer?.publishClickTool.publishClickType !== config.publish.type) {
@@ -823,7 +838,9 @@ export function ThreeDeeRender(props: {
             perspective={config.cameraState.perspective}
             onTogglePerspective={onTogglePerspective}
             measureActive={measureActive}
+            rangeMarkers={renderer?.config.rangeMarkersConfig ?? DEFAULT_RANGE_MARKERS_CONFIG}
             onClickMeasure={onClickMeasure}
+            onClickRangeMarkers={onClickRangeMarkers}
             canPublish={canPublish}
             publishActive={publishActive}
             onClickPublish={onClickPublish}

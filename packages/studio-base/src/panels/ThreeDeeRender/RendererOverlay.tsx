@@ -2,7 +2,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Ruler20Filled, Ruler20Regular } from "@fluentui/react-icons";
+import {
+  Ruler20Filled,
+  Ruler20Regular,
+  Target20Regular,
+  Target20Filled,
+} from "@fluentui/react-icons";
 import {
   Button,
   IconButton,
@@ -27,6 +32,7 @@ import PublishGoalIcon from "@foxglove/studio-base/components/PublishGoalIcon";
 import PublishPointIcon from "@foxglove/studio-base/components/PublishPointIcon";
 import PublishPoseEstimateIcon from "@foxglove/studio-base/components/PublishPoseEstimateIcon";
 import { usePanelMousePresence } from "@foxglove/studio-base/hooks/usePanelMousePresence";
+import { RangeMarkersConfig } from "@foxglove/studio-base/panels/ThreeDeeRender/IRenderer";
 
 import { InteractionContextMenu, Interactions, SelectionObject, TabType } from "./Interactions";
 import type { PickedRenderable } from "./Picker";
@@ -55,6 +61,11 @@ const useStyles = makeStyles()((theme) => ({
     justifyContent: "center",
     alignItems: "center",
   },
+  rangeMarkersIcon: {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   threeDeeButton: {
     fontFamily: theme.typography.fontMonospace,
     fontFeatureSettings: theme.typography.caption.fontFeatureSettings,
@@ -78,8 +89,10 @@ type Props = {
   enableStats: boolean;
   interfaceMode: InterfaceMode;
   measureActive: boolean;
+  rangeMarkers: RangeMarkersConfig;
   onChangePublishClickType: (_: PublishClickType) => void;
   onClickMeasure: () => void;
+  onClickRangeMarkers: () => void;
   onClickPublish: () => void;
   onShowTopicSettings: (topic: string) => void;
   onTogglePerspective: () => void;
@@ -343,6 +356,21 @@ export function RendererOverlay(props: Props): JSX.Element {
             >
               <div className={classes.rulerIcon}>
                 {props.measureActive ? <Ruler20Filled /> : <Ruler20Regular />}
+              </div>
+            </IconButton>
+            <IconButton
+              className={classes.iconButton}
+              size="small"
+              color={props.rangeMarkers.followCamera ? "info" : "inherit"}
+              title={
+                props.rangeMarkers.followCamera
+                  ? "Lock Range Markers"
+                  : "Range Markers Follow Camera"
+              }
+              onClick={props.onClickRangeMarkers}
+            >
+              <div className={classes.rangeMarkersIcon}>
+                {props.rangeMarkers.followCamera ? <Target20Filled /> : <Target20Regular />}
               </div>
             </IconButton>
 

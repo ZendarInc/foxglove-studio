@@ -77,6 +77,7 @@ const defaultRendererConfig: RendererConfig = {
   topics: {},
   layers: {},
   publish: DEFAULT_PUBLISH_SETTINGS,
+  rangeMarkers: { followCamera: false },
   imageMode: {},
 };
 

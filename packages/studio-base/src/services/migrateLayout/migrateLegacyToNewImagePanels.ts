@@ -3,7 +3,10 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { LayoutData } from "@foxglove/studio-base/context/CurrentLayoutContext/actions";
-import type { RendererConfig } from "@foxglove/studio-base/panels/ThreeDeeRender/IRenderer";
+import {
+  DEFAULT_RANGE_MARKERS_CONFIG,
+  type RendererConfig,
+} from "@foxglove/studio-base/panels/ThreeDeeRender/IRenderer";
 import { DEFAULT_CAMERA_STATE } from "@foxglove/studio-base/panels/ThreeDeeRender/camera";
 import { DEFAULT_PUBLISH_SETTINGS } from "@foxglove/studio-base/panels/ThreeDeeRender/renderables/PublishSettings";
 import {
@@ -41,6 +44,7 @@ function migrateLegacyToNewImageConfig(legacyConfig: Partial<LegacyImageConfig>)
     topics: {},
     layers: {},
     publish: DEFAULT_PUBLISH_SETTINGS,
+    rangeMarkersConfig: DEFAULT_RANGE_MARKERS_CONFIG,
     imageMode: {
       imageTopic: legacyConfig.cameraTopic,
       calibrationTopic: undefined,

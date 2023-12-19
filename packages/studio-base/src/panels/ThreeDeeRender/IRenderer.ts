@@ -64,6 +64,7 @@ export type RendererEvents = {
   topicsChanged: (renderer: IRenderer) => void;
   resetViewChanged: (renderer: IRenderer) => void;
   resetAllFramesCursor: (renderer: IRenderer) => void;
+  rangeMarkersConfigChanged: (rangeMarkersConfig: RangeMarkersConfig, renderer: IRenderer) => void;
 };
 
 export type FollowMode = "follow-pose" | "follow-position" | "follow-none";
@@ -96,6 +97,15 @@ export type ImageModeConfig = Partial<ColorModeSettings> & {
   minValue?: number;
   /** Maximum (white) value for single-channel images */
   maxValue?: number;
+};
+
+export type RangeMarkersConfig = {
+  /** Redraw range markers when the camera state or viewport state changes to stay within FOV */
+  followCamera: boolean;
+};
+
+export const DEFAULT_RANGE_MARKERS_CONFIG: RangeMarkersConfig = {
+  followCamera: false,
 };
 
 export type RendererConfig = {
@@ -152,6 +162,7 @@ export type RendererConfig = {
     /** The theta standard deviation to publish with poses */
     poseEstimateThetaDeviation: number;
   };
+  rangeMarkersConfig: RangeMarkersConfig;
   /** frameId -> settings */
   transforms: Record<string, Partial<LayerSettingsTransform> | undefined>;
   /** topicName -> settings */
