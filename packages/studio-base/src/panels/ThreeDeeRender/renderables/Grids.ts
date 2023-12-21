@@ -118,8 +118,8 @@ export class Grids extends SceneExtension<GridRenderable> {
     });
 
     renderer.on("transformTreeUpdated", this.#handleTransformTreeUpdated);
-    renderer.on("rangeMarkersConfigChanged", this.#rangeMarkersConfigChanged);
-    renderer.on("cameraMove", this.#cameraMove);
+    renderer.on("rangeMarkersConfigChanged", this.#handleRangeMarkersConfigChanged);
+    renderer.on("cameraStateChanged", this.#handleCameraStateChanged);
 
     // Load existing grid layers from the config
     for (const [instanceId, entry] of Object.entries(renderer.config.layers)) {
@@ -131,8 +131,8 @@ export class Grids extends SceneExtension<GridRenderable> {
 
   public override dispose(): void {
     this.renderer.off("transformTreeUpdated", this.#handleTransformTreeUpdated);
-    this.renderer.off("rangeMarkersConfigChanged", this.#rangeMarkersConfigChanged);
-    this.renderer.off("cameraMove", this.#cameraMove);
+    this.renderer.off("rangeMarkersConfigChanged", this.#handleRangeMarkersConfigChanged);
+    this.renderer.off("cameraStateChanged", this.#handleCameraStateChanged);
 
     super.dispose();
   }
@@ -329,7 +329,7 @@ export class Grids extends SceneExtension<GridRenderable> {
     this.#updateGrid(instanceId, settings);
   };
 
-  #rangeMarkersConfigChanged = (rangeMarkersConfig: RangeMarkersConfig): void => {
+  #handleRangeMarkersConfigChanged = (rangeMarkersConfig: RangeMarkersConfig): void => {
     for (const [instanceId, entry] of Object.entries(this.renderer.config.layers)) {
       if (entry?.layerId !== LAYER_ID) {
         continue;
@@ -350,7 +350,7 @@ export class Grids extends SceneExtension<GridRenderable> {
     }
   };
 
-  #cameraMove = (): void => {
+  #handleCameraStateChanged = (): void => {
     for (const [instanceId, entry] of Object.entries(this.renderer.config.layers)) {
       if (entry?.layerId === LAYER_ID) {
         this.#updateGrid(instanceId, entry as Partial<LayerSettingsGrid>);

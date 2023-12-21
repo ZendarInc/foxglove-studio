@@ -45,6 +45,7 @@ export type RendererEvents = {
   startFrame: (currentTime: bigint, renderer: IRenderer) => void;
   endFrame: (currentTime: bigint, renderer: IRenderer) => void;
   cameraMove: (renderer: IRenderer) => void;
+  cameraStateChanged: (renderer: IRenderer) => void;
   renderablesClicked: (
     selections: PickedRenderable[],
     cursorCoords: { x: number; y: number },
