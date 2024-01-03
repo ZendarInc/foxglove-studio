@@ -172,4 +172,12 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     module: async () => await import("./Tab"),
     hasCustomToolbar: true,
   },
+  // Zendar Custom Panels
+  {
+    title: "(Z) Message Filters",
+    type: "Zendar.MessageFilters",
+    description: "Message Filters",
+    thumbnail: variableSliderThumbnail,
+    module: async () => await import("./Zendar/MessageFilters"),
+  },
 ];
