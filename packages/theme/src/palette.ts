@@ -36,7 +36,7 @@ export const dark: PaletteOptions = {
     primary: "#fffff",
     text: "#96939B",
   },
-  primary: { main: "#0C1525" },
+  primary: { main: "#ffffff" },
   secondary: { main: "#ffffff" },
   error: { main: "#e62d20" },
   warning: { main: "#e6ae20" },
