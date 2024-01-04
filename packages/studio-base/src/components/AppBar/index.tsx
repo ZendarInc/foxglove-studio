@@ -16,8 +16,8 @@ import { useTranslation } from "react-i18next";
 import tc from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
-import { FoxgloveLogo } from "@foxglove/studio-base/components/FoxgloveLogo";
 import Stack from "@foxglove/studio-base/components/Stack";
+import { ZendarLogo } from "@foxglove/studio-base/components/ZendarLogo";
 import { useAppContext } from "@foxglove/studio-base/context/AppContext";
 import {
   LayoutState,
@@ -207,7 +207,7 @@ export function AppBar(props: AppBarProps): JSX.Element {
                   setAppMenuEl(event.currentTarget);
                 }}
               >
-                <FoxgloveLogo fontSize="inherit" color="inherit" />
+                <ZendarLogo fontSize="inherit" color="inherit" />
                 <ChevronDown12Regular
                   className={classes.dropDownIcon}
                   primaryFill={theme.palette.common.white}
