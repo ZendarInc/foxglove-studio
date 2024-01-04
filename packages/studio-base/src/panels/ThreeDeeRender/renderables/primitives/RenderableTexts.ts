@@ -51,12 +51,14 @@ export class RenderableTexts extends RenderablePrimitive {
       label.setText(text.text);
       label.setColor(SRGBToLinear(color.r), SRGBToLinear(color.g), SRGBToLinear(color.b), color.a);
 
+      const backgroundAlpha = 0;
       const foregroundIsDark = getLuminance(color.r, color.g, color.b) < 0.5;
       if (foregroundIsDark) {
-        label.setBackgroundColor(1, 1, 1, color.a);
+        label.setBackgroundColor(1, 1, 1, backgroundAlpha);
       } else {
-        label.setBackgroundColor(0, 0, 0, color.a);
+        label.setBackgroundColor(0, 0, 0, backgroundAlpha);
       }
+
       label.setLineHeight(text.font_size);
       // note that billboard needs to be true for scale_invariant to work
       label.setBillboard(text.billboard);
